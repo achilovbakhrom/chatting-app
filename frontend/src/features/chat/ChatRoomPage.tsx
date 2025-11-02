@@ -119,19 +119,22 @@ export default function ChatRoomPage() {
   useEffect(() => {
     if (chatId) {
       loadChat();
-      loadMessages();
-      // Clear unread count on backend and frontend
-      clearUnreadCount();
+      loadMessages().then(() => {
+        // Clear unread only once after initial message load
+        clearUnreadCount();
+      });
     }
   }, [chatId]);
 
   const clearUnreadCount = async () => {
     if (!chatId) return;
+
     try {
-      await api.patch(`/unread/${chatId}/clear`);
+      await api.patch(`/unread/${chatId}/mark-read`);
       clearUnread(chatId);
+      console.log(`[ChatRoomPage] Marked chat ${chatId} as read`);
     } catch (err) {
-      console.error('Failed to clear unread count', err);
+      console.error('Failed to mark chat as read', err);
     }
   };
 
@@ -146,7 +149,7 @@ export default function ChatRoomPage() {
     }
   };
 
-  const loadMessages = async () => {
+  const loadMessages = async (): Promise<void> => {
     try {
       setLoading(true);
       const response = await api.get(`/messages/chat/${chatId}?limit=100`);

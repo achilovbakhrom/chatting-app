@@ -40,8 +40,13 @@ export default function ChatsPage() {
   const loadUnreadCounts = async () => {
     try {
       const response = await api.get('/unread');
-      // Response is a map of chatId -> count
-      setUnreadCounts(response.data);
+      console.log('Raw unread response from backend:', response.data);
+
+      // Response is a simple map of chatId -> count
+      const counts: Record<string, number> = response.data;
+      console.log('Unread counts:', counts);
+
+      setUnreadCounts(counts);
     } catch (err: any) {
       console.error('Failed to load unread counts', err);
     }
@@ -49,13 +54,7 @@ export default function ChatsPage() {
 
   const handleChatClick = async (chat: any) => {
     setCurrentChat(chat);
-    // Clear unread on backend
-    try {
-      await api.patch(`/unread/${chat._id}/clear`);
-      clearUnread(chat._id);
-    } catch (err) {
-      console.error('Failed to clear unread count', err);
-    }
+    clearUnread(chat._id);
     navigate(`/chats/${chat._id}`);
   };
 
@@ -127,6 +126,7 @@ export default function ChatsPage() {
           <div className="space-y-2">
             {chats.map((chat) => {
               const unreadCount = unreadCounts[chat._id] || 0;
+              console.log(`Rendering chat ${chat._id}, unread count: ${unreadCount}`);
               return (
                 <div
                   key={chat._id}

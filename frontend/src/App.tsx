@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { useAuthStore } from './store/authStore';
 import { useChatStore } from './store/chatStore';
 import { socketService } from './services/socket';
+import api from './services/api';
 import ExamplePage from './ExamplePage';
 import LoginPage from './features/auth/LoginPage';
 import RegisterPage from './features/auth/RegisterPage';
@@ -17,7 +18,7 @@ import './App.css';
 function GlobalSocketListener() {
   const user = useAuthStore((state) => state.user);
   const token = useAuthStore((state) => state.token);
-  const incrementUnread = useChatStore((state) => state.incrementUnread);
+  const setUnreadCounts = useChatStore((state) => state.setUnreadCounts);
   const updateChatLastMessage = useChatStore((state) => state.updateChatLastMessage);
   const location = useLocation();
 
@@ -51,8 +52,14 @@ function GlobalSocketListener() {
       console.log('Is in chat room?', isInChatRoom, 'Path:', location.pathname, 'Chat ID:', message.chatId);
 
       if (String(senderId) !== String(currentUserId) && !isInChatRoom) {
-        console.log('Incrementing unread count for chat:', message.chatId);
-        incrementUnread(message.chatId);
+        console.log('New message from another user while not in chat room');
+
+        // Reload unread counts from backend
+        api.get('/unread').then(response => {
+          // Response is simple map: { chatId: count }
+          setUnreadCounts(response.data);
+          console.log('[App] Reloaded unread counts:', response.data);
+        }).catch(err => console.error('Failed to reload unread counts', err));
 
         // Show browser notification
         if ('Notification' in window && Notification.permission === 'granted') {
@@ -61,8 +68,6 @@ function GlobalSocketListener() {
             icon: '/favicon.ico',
           });
         }
-      } else {
-        console.log('Not incrementing unread - either own message or in chat room');
       }
 
       // Update the chat's last message in the store
@@ -91,7 +96,7 @@ function GlobalSocketListener() {
       // Keep socket connected, just remove the listener
       socketService.getSocket()?.off('message:new', handleNewMessage);
     };
-  }, [token, user, location.pathname, incrementUnread, updateChatLastMessage]);
+  }, [token, user, location.pathname, setUnreadCounts, updateChatLastMessage]);
 
   return null;
 }
