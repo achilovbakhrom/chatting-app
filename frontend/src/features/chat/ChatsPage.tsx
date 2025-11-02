@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../../store/authStore';
 import { useChatStore } from '../../store/chatStore';
-import { socketService } from '../../services/socket';
 import api from '../../services/api';
 import { formatDate } from '../../lib/utils';
 
@@ -12,17 +11,17 @@ export default function ChatsPage() {
 
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
-  const token = useAuthStore((state) => state.token);
   const logout = useAuthStore((state) => state.logout);
   const chats = useChatStore((state) => state.chats);
   const setChats = useChatStore((state) => state.setChats);
   const setCurrentChat = useChatStore((state) => state.setCurrentChat);
   const unreadCounts = useChatStore((state) => state.unreadCounts);
-  const incrementUnread = useChatStore((state) => state.incrementUnread);
+  const setUnreadCounts = useChatStore((state) => state.setUnreadCounts);
   const clearUnread = useChatStore((state) => state.clearUnread);
 
   useEffect(() => {
     loadChats();
+    loadUnreadCounts();
   }, []);
 
   const loadChats = async () => {
@@ -38,9 +37,25 @@ export default function ChatsPage() {
     }
   };
 
-  const handleChatClick = (chat: any) => {
+  const loadUnreadCounts = async () => {
+    try {
+      const response = await api.get('/unread');
+      // Response is a map of chatId -> count
+      setUnreadCounts(response.data);
+    } catch (err: any) {
+      console.error('Failed to load unread counts', err);
+    }
+  };
+
+  const handleChatClick = async (chat: any) => {
     setCurrentChat(chat);
-    clearUnread(chat._id);
+    // Clear unread on backend
+    try {
+      await api.patch(`/unread/${chat._id}/clear`);
+      clearUnread(chat._id);
+    } catch (err) {
+      console.error('Failed to clear unread count', err);
+    }
     navigate(`/chats/${chat._id}`);
   };
 

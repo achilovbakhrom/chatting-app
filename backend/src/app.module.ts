@@ -9,6 +9,7 @@ import { BidsModule } from './bids/bids.module';
 import { StorageModule } from './storage/storage.module';
 import { TranslationModule } from './translation/translation.module';
 import { WebsocketModule } from './websocket/websocket.module';
+import { UnreadModule } from './unread/unread.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { WebsocketModule } from './websocket/websocket.module';
     StorageModule,
     TranslationModule,
     WebsocketModule,
+    UnreadModule,
   ],
 })
 export class AppModule {}

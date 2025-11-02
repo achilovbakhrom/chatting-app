@@ -33,70 +33,116 @@ export class ChatsService {
   }
 
   async findAll(userId: string): Promise<any[]> {
-    const chats = await this.chatModel
-      .find({ participants: new Types.ObjectId(userId) })
-      .sort({ updatedAt: -1 })
-      .lean()
-      .exec();
-
-    // Manually populate participants, createdBy, and lastMessage
-    const populatedChats = await Promise.all(
-      chats.map(async (chat) => {
-        // Populate participants
-        const participantUsers = await Promise.all(
-          chat.participants.map(async (participantId: any) => {
-            const user = await this.usersService.findOne(participantId.toString());
-            return {
-              _id: (user as any)._id,
-              id: (user as any)._id,
-              name: user.name,
-              email: user.email,
-              role: user.role
-            };
-          })
-        );
-
-        // Populate createdBy
-        const createdByUser = await this.usersService.findOne(chat.createdBy.toString());
-
-        // Populate lastMessage if exists
-        let lastMessage = null;
-        if (chat.lastMessage) {
-          const Message = this.chatModel.db.model('Message');
-          const msg: any = await Message.findById(chat.lastMessage).lean().exec();
-          if (msg) {
-            const sender = await this.usersService.findOne(msg.senderId.toString());
-            lastMessage = {
-              _id: msg._id,
-              content: msg.content,
-              type: msg.type,
-              senderId: {
-                _id: (sender as any)._id,
-                name: sender.name
+    // Use aggregation to avoid N+1 queries
+    const chats = await this.chatModel.aggregate([
+      // Match chats where user is a participant
+      {
+        $match: { participants: new Types.ObjectId(userId) }
+      },
+      // Sort by most recent
+      {
+        $sort: { updatedAt: -1 }
+      },
+      // Lookup participants
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'participants',
+          foreignField: '_id',
+          as: 'participantDocs'
+        }
+      },
+      // Lookup createdBy
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'createdBy',
+          foreignField: '_id',
+          as: 'createdByDoc'
+        }
+      },
+      // Lookup lastMessage
+      {
+        $lookup: {
+          from: 'messages',
+          localField: 'lastMessage',
+          foreignField: '_id',
+          as: 'lastMessageDoc'
+        }
+      },
+      // Unwind lastMessage (optional since it may not exist)
+      {
+        $unwind: {
+          path: '$lastMessageDoc',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      // Lookup lastMessage sender
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'lastMessageDoc.senderId',
+          foreignField: '_id',
+          as: 'lastMessageSenderDoc'
+        }
+      },
+      // Project the final structure
+      {
+        $project: {
+          _id: 1,
+          isMutable: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          participants: {
+            $map: {
+              input: '$participantDocs',
+              as: 'user',
+              in: {
+                _id: '$$user._id',
+                id: '$$user._id',
+                name: '$$user.name',
+                email: '$$user.email',
+                role: '$$user.role'
+              }
+            }
+          },
+          createdBy: {
+            $let: {
+              vars: { creator: { $arrayElemAt: ['$createdByDoc', 0] } },
+              in: {
+                _id: '$$creator._id',
+                name: '$$creator.name',
+                email: '$$creator.email',
+                role: '$$creator.role'
+              }
+            }
+          },
+          lastMessage: {
+            $cond: {
+              if: { $ifNull: ['$lastMessageDoc', false] },
+              then: {
+                _id: '$lastMessageDoc._id',
+                content: '$lastMessageDoc.content',
+                type: '$lastMessageDoc.type',
+                createdAt: '$lastMessageDoc.createdAt',
+                senderId: {
+                  $let: {
+                    vars: { sender: { $arrayElemAt: ['$lastMessageSenderDoc', 0] } },
+                    in: {
+                      _id: '$$sender._id',
+                      name: '$$sender.name'
+                    }
+                  }
+                }
               },
-              createdAt: msg.createdAt
-            };
+              else: null
+            }
           }
         }
+      }
+    ]).exec();
 
-        return {
-          _id: chat._id,
-          participants: participantUsers,
-          isMutable: chat.isMutable,
-          createdBy: {
-            _id: (createdByUser as any)._id,
-            name: createdByUser.name,
-            email: createdByUser.email,
-            role: createdByUser.role
-          },
-          lastMessage,
-          createdAt: chat.createdAt,
-          updatedAt: chat.updatedAt
-        };
-      })
-    );
-
-    return populatedChats;
+    return chats;
   }
 
   async findOne(id: string, userId: string): Promise<any> {

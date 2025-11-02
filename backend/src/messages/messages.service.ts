@@ -18,6 +18,8 @@ import { STORAGE_SERVICE } from '../storage/storage.module';
 import { WebsocketGateway } from '../websocket/websocket.gateway';
 import { MessageType } from '../common/enums';
 import { Bid, BidDocument } from '../bids/schemas/bid.schema';
+import { UnreadService } from '../unread/unread.service';
+import { PaginationDto, PaginatedResult } from '../common/dto/pagination.dto';
 
 @Injectable()
 export class MessagesService {
@@ -28,6 +30,7 @@ export class MessagesService {
     private translationService: TranslationService,
     @Inject(STORAGE_SERVICE) private storageService: IStorageService,
     private websocketGateway: WebsocketGateway,
+    private unreadService: UnreadService,
   ) {}
 
   async create(createMessageDto: CreateMessageDto, userId: string, file?: Express.Multer.File): Promise<MessageDocument> {
@@ -116,6 +119,15 @@ export class MessagesService {
       .lean()
       .exec();
 
+    // Increment unread count for all participants except sender
+    const participants = chat.participants as any[];
+    for (const participant of participants) {
+      const participantId = participant._id?.toString() || participant.toString();
+      if (participantId !== userId) {
+        await this.unreadService.increment(participantId, createMessageDto.chatId);
+      }
+    }
+
     // Emit WebSocket event to all users in the chat
     // Ensure chatId is a string for proper serialization
     const messageToEmit = {
@@ -127,41 +139,180 @@ export class MessagesService {
     return savedMessage;
   }
 
-  async findAllByChat(chatId: string, userId: string): Promise<any[]> {
+  async findAllByChat(
+    chatId: string,
+    userId: string,
+    paginationDto?: PaginationDto,
+  ): Promise<PaginatedResult<any>> {
     // Verify user is a participant
     await this.chatsService.findOne(chatId, userId);
 
-    const messages = await this.messageModel
-      .find({ chatId: new Types.ObjectId(chatId) })
-      .populate('senderId', '-password')
-      .populate('replyTo')
-      .sort({ createdAt: 1 })
-      .lean()
-      .exec();
+    const page = paginationDto?.page || 1;
+    const limit = paginationDto?.limit || 50;
+    const skip = (page - 1) * limit;
 
-    // Manually populate bid data for BID type messages
-    const messagesWithBids = await Promise.all(
-      messages.map(async (message: any) => {
-        if (message.type === 'BID') {
-          // Find the bid associated with this message
-          const bid = await this.bidModel
-            .findOne({ messageId: message._id })
-            .populate('createdBy', '-password')
-            .populate('addressedTo', '-password')
-            .lean()
-            .exec();
-          if (bid) {
-            return {
-              ...message,
-              bidData: bid,
-            };
+    // Get total count
+    const total = await this.messageModel.countDocuments({
+      chatId: new Types.ObjectId(chatId),
+    });
+
+    // Use aggregation to efficiently populate bids in one query
+    const messages = await this.messageModel.aggregate([
+      {
+        $match: { chatId: new Types.ObjectId(chatId) }
+      },
+      {
+        $sort: { createdAt: 1 }
+      },
+      // Pagination
+      {
+        $skip: skip
+      },
+      {
+        $limit: limit
+      },
+      // Lookup sender
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'senderId',
+          foreignField: '_id',
+          as: 'senderDoc'
+        }
+      },
+      // Lookup replyTo message
+      {
+        $lookup: {
+          from: 'messages',
+          localField: 'replyTo',
+          foreignField: '_id',
+          as: 'replyToDoc'
+        }
+      },
+      // Lookup bid (if message is BID type)
+      {
+        $lookup: {
+          from: 'bids',
+          localField: '_id',
+          foreignField: 'messageId',
+          as: 'bidDoc'
+        }
+      },
+      // Unwind optional fields
+      {
+        $unwind: {
+          path: '$senderDoc',
+          preserveNullAndEmptyArrays: false
+        }
+      },
+      {
+        $unwind: {
+          path: '$replyToDoc',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $unwind: {
+          path: '$bidDoc',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      // Lookup bid creator and addressedTo
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'bidDoc.createdBy',
+          foreignField: '_id',
+          as: 'bidCreatorDoc'
+        }
+      },
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'bidDoc.addressedTo',
+          foreignField: '_id',
+          as: 'bidAddressedToDoc'
+        }
+      },
+      // Project final structure
+      {
+        $project: {
+          _id: 1,
+          chatId: 1,
+          type: 1,
+          content: 1,
+          translations: 1,
+          editHistory: 1,
+          fileMetadata: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          senderId: {
+            _id: '$senderDoc._id',
+            name: '$senderDoc.name',
+            email: '$senderDoc.email',
+            role: '$senderDoc.role'
+          },
+          replyTo: {
+            $cond: {
+              if: { $ifNull: ['$replyToDoc', false] },
+              then: '$replyToDoc',
+              else: null
+            }
+          },
+          bidData: {
+            $cond: {
+              if: { $ifNull: ['$bidDoc', false] },
+              then: {
+                _id: '$bidDoc._id',
+                amount: '$bidDoc.amount',
+                currency: '$bidDoc.currency',
+                description: '$bidDoc.description',
+                status: '$bidDoc.status',
+                createdAt: '$bidDoc.createdAt',
+                updatedAt: '$bidDoc.updatedAt',
+                createdBy: {
+                  $let: {
+                    vars: { creator: { $arrayElemAt: ['$bidCreatorDoc', 0] } },
+                    in: {
+                      _id: '$$creator._id',
+                      name: '$$creator.name',
+                      email: '$$creator.email',
+                      role: '$$creator.role'
+                    }
+                  }
+                },
+                addressedTo: {
+                  $let: {
+                    vars: { addressed: { $arrayElemAt: ['$bidAddressedToDoc', 0] } },
+                    in: {
+                      _id: '$$addressed._id',
+                      name: '$$addressed.name',
+                      email: '$$addressed.email',
+                      role: '$$addressed.role'
+                    }
+                  }
+                }
+              },
+              else: null
+            }
           }
         }
-        return message;
-      }),
-    );
+      }
+    ]).exec();
 
-    return messagesWithBids;
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data: messages,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1,
+      },
+    };
   }
 
   async findOne(id: string, userId: string): Promise<MessageDocument> {

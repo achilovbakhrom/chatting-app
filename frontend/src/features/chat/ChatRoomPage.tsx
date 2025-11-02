@@ -120,10 +120,20 @@ export default function ChatRoomPage() {
     if (chatId) {
       loadChat();
       loadMessages();
-      // Clear unread count when entering chat
-      clearUnread(chatId);
+      // Clear unread count on backend and frontend
+      clearUnreadCount();
     }
   }, [chatId]);
+
+  const clearUnreadCount = async () => {
+    if (!chatId) return;
+    try {
+      await api.patch(`/unread/${chatId}/clear`);
+      clearUnread(chatId);
+    } catch (err) {
+      console.error('Failed to clear unread count', err);
+    }
+  };
 
   const loadChat = async () => {
     try {
@@ -139,8 +149,10 @@ export default function ChatRoomPage() {
   const loadMessages = async () => {
     try {
       setLoading(true);
-      const response = await api.get(`/messages/chat/${chatId}`);
-      setMessages(response.data);
+      const response = await api.get(`/messages/chat/${chatId}?limit=100`);
+      // Backend now returns { data: messages[], pagination: {...} }
+      const messages = response.data.data || response.data;
+      setMessages(messages);
     } catch (err) {
       console.error('Failed to load messages', err);
     } finally {
@@ -313,24 +325,16 @@ export default function ChatRoomPage() {
 
   const handleBidAction = async (bidId: string, action: 'accept' | 'reject') => {
     try {
-      const socket = socketService.getSocket();
-      if (!socket) {
-        throw new Error('Socket not connected');
-      }
-
-      // Emit bid status update via Socket.io
-      socket.emit('bid:updateStatus', {
-        bidId,
+      // Use REST API for bid status updates
+      await api.patch(`/bids/${bidId}/status`, {
         status: action === 'accept' ? 'ACCEPTED' : 'REJECTED',
-      }, (response: any) => {
-        if (!response.success) {
-          console.error(`Failed to ${action} bid:`, response.error);
-          alert(response.error || `Failed to ${action} bid`);
-        }
       });
+
+      // Reload messages to show updated bid
+      await loadMessages();
     } catch (err: any) {
       console.error(`Failed to ${action} bid`, err);
-      alert(err.message || `Failed to ${action} bid`);
+      alert(err.response?.data?.message || `Failed to ${action} bid`);
     }
   };
 

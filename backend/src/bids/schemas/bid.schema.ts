@@ -6,10 +6,10 @@ export type BidDocument = Bid & Document;
 
 @Schema({ timestamps: true })
 export class Bid {
-  @Prop({ type: Types.ObjectId, ref: 'Message', required: true })
+  @Prop({ type: Types.ObjectId, ref: 'Message', required: true, index: true })
   messageId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'Chat', required: true })
+  @Prop({ type: Types.ObjectId, ref: 'Chat', required: true, index: true })
   chatId: Types.ObjectId;
 
   @Prop({ required: true })

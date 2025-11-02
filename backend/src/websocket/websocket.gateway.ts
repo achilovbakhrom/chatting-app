@@ -99,35 +99,6 @@ export class WebsocketGateway implements OnGatewayConnection, OnGatewayDisconnec
     });
   }
 
-  @SubscribeMessage('bid:updateStatus')
-  async handleBidUpdateStatus(
-    @ConnectedSocket() client: Socket,
-    @MessageBody() data: { bidId: string; status: string },
-  ) {
-    try {
-      const userId = client.data.userId;
-      if (!userId) {
-        throw new UnauthorizedException('User not authenticated');
-      }
-
-      if (!this.bidsService) {
-        throw new Error('BidsService not initialized');
-      }
-
-      // Call BidsService to update the bid
-      const updatedBid = await this.bidsService.updateStatus(
-        data.bidId,
-        { status: data.status },
-        userId,
-      );
-
-      return { success: true, bid: updatedBid };
-    } catch (error) {
-      console.error('Error updating bid status:', error);
-      return { success: false, error: error.message };
-    }
-  }
-
   // Server-side methods to emit events
   emitNewMessage(_chatId: string, message: any) {
     // Emit to all connected sockets (covers both /chats page and chat rooms)

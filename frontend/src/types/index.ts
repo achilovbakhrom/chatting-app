@@ -40,6 +40,16 @@ export interface Chat {
   participants: User[];
   isMutable: boolean;
   createdBy: User;
+  lastMessage?: {
+    _id: string;
+    content: string;
+    type: MessageType;
+    senderId: {
+      _id: string;
+      name: string;
+    };
+    createdAt: string;
+  };
   createdAt: string;
   updatedAt: string;
 }

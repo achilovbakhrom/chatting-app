@@ -21,6 +21,7 @@ import { UpdateMessageDto } from './dto/update-message.dto';
 import { TranslateMessageDto } from './dto/translate-message.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { PaginationDto } from '../common/dto/pagination.dto';
 
 @ApiTags('messages')
 @Controller('messages')
@@ -41,8 +42,12 @@ export class MessagesController {
   }
 
   @Get('chat/:chatId')
-  findAllByChat(@Param('chatId') chatId: string, @CurrentUser() user: any) {
-    return this.messagesService.findAllByChat(chatId, user.sub);
+  findAllByChat(
+    @Param('chatId') chatId: string,
+    @Query() paginationDto: PaginationDto,
+    @CurrentUser() user: any,
+  ) {
+    return this.messagesService.findAllByChat(chatId, user.sub, paginationDto);
   }
 
   @Get(':id')

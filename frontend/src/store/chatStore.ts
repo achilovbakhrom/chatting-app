@@ -15,6 +15,7 @@ interface ChatState {
   deleteMessage: (messageId: string) => void;
   incrementUnread: (chatId: string) => void;
   clearUnread: (chatId: string) => void;
+  setUnreadCounts: (counts: Record<string, number>) => void;
   updateChatLastMessage: (chatId: string, message: any) => void;
 }
 
@@ -67,6 +68,11 @@ export const useChatStore = create<ChatState>((set) => ({
         [chatId]: 0,
       },
     })),
+
+  setUnreadCounts: (counts) =>
+    set({
+      unreadCounts: counts,
+    }),
 
   updateChatLastMessage: (chatId, message) =>
     set((state) => ({

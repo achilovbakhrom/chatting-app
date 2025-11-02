@@ -8,6 +8,7 @@ import { ChatsModule } from '../chats/chats.module';
 import { TranslationModule } from '../translation/translation.module';
 import { StorageModule } from '../storage/storage.module';
 import { WebsocketModule } from '../websocket/websocket.module';
+import { UnreadModule } from '../unread/unread.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { WebsocketModule } from '../websocket/websocket.module';
     TranslationModule,
     StorageModule,
     WebsocketModule,
+    UnreadModule,
   ],
   controllers: [MessagesController],
   providers: [MessagesService],

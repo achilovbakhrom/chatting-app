@@ -16,10 +16,10 @@ export interface EditHistory {
 
 @Schema({ timestamps: true })
 export class Message {
-  @Prop({ type: Types.ObjectId, ref: 'Chat', required: true })
+  @Prop({ type: Types.ObjectId, ref: 'Chat', required: true, index: true })
   chatId: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: 'User', required: true })
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
   senderId: Types.ObjectId;
 
   @Prop({ required: true, enum: MessageType })
@@ -53,3 +53,6 @@ export class Message {
 }
 
 export const MessageSchema = SchemaFactory.createForClass(Message);
+
+// Compound index for efficient chat message queries
+MessageSchema.index({ chatId: 1, createdAt: -1 });
