@@ -45,6 +45,10 @@ export class Message {
     fileId: string;
   };
 
+  // Track which users haven't read this message yet
+  @Prop({ type: [Types.ObjectId], ref: 'User', default: [], index: true })
+  unreadBy: Types.ObjectId[];
+
   @Prop({ default: Date.now })
   createdAt: Date;
 

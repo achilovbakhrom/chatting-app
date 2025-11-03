@@ -105,6 +105,14 @@ export class MessagesService {
       messageData.translations = translations;
     }
 
+    // Mark message as unread for all participants except sender
+    const participants = chat.participants as any[];
+    messageData.unreadBy = participants
+      .filter(p => p._id.toString() !== userId)
+      .map(p => new Types.ObjectId(p._id.toString()));
+
+    console.log(`[MessagesService] Creating message with unreadBy:`, messageData.unreadBy.map(id => id.toString()));
+
     const message = new this.messageModel(messageData);
     const savedMessage = await message.save();
 
@@ -118,15 +126,6 @@ export class MessagesService {
       .populate('replyTo')
       .lean()
       .exec();
-
-    // Increment unread count for all participants except sender
-    const participants = chat.participants as any[];
-    for (const participant of participants) {
-      const participantId = participant._id?.toString() || participant.toString();
-      if (participantId !== userId) {
-        await this.unreadService.increment(participantId, createMessageDto.chatId);
-      }
-    }
 
     // Emit WebSocket event to all users in the chat
     // Ensure chatId is a string for proper serialization

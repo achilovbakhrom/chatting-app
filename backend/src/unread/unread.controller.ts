@@ -1,6 +1,7 @@
-import { Controller, Get, Param, Patch, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
 import { UnreadService } from './unread.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @Controller('unread')
 @UseGuards(JwtAuthGuard)
@@ -8,20 +9,20 @@ export class UnreadController {
   constructor(private readonly unreadService: UnreadService) {}
 
   @Get()
-  async getUnreadCounts(@Request() req) {
-    return this.unreadService.getUnreadCounts(req.user.userId);
+  async getUnreadCounts(@CurrentUser() user: any) {
+    const counts = await this.unreadService.getUnreadCounts(user.sub);
+    return counts;
   }
 
   @Get(':chatId')
-  async getUnreadCount(@Request() req, @Param('chatId') chatId: string) {
-    return {
-      count: await this.unreadService.getUnreadCount(req.user.userId, chatId),
-    };
+  async getUnreadCount(@CurrentUser() user: any, @Param('chatId') chatId: string) {
+    const count = await this.unreadService.getUnreadCount(user.sub, chatId);
+    return { count };
   }
 
-  @Patch(':chatId/clear')
-  async clearUnread(@Request() req, @Param('chatId') chatId: string) {
-    await this.unreadService.clear(req.user.userId, chatId);
+  @Patch(':chatId/mark-read')
+  async markAsRead(@CurrentUser() user: any, @Param('chatId') chatId: string) {
+    await this.unreadService.markChatAsRead(user.sub, chatId);
     return { success: true };
   }
 }

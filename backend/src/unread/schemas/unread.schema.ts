@@ -11,11 +11,12 @@ export class Unread {
   @Prop({ type: Types.ObjectId, ref: 'Chat', required: true, index: true })
   chatId: Types.ObjectId;
 
-  @Prop({ default: 0 })
-  count: number;
-
+  // Track the last message this user has read in this chat
   @Prop({ type: Types.ObjectId, ref: 'Message' })
   lastReadMessageId?: Types.ObjectId;
+
+  @Prop({ default: Date.now })
+  updatedAt: Date;
 }
 
 export const UnreadSchema = SchemaFactory.createForClass(Unread);
