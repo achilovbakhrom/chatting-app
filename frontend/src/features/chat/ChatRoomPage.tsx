@@ -6,6 +6,7 @@ import api from '../../services/api';
 import { socketService } from '../../services/socket';
 import { formatDate } from '../../lib/utils';
 import { MessageType } from '../../types';
+import VoicePlayer from '../../components/VoicePlayer';
 
 export default function ChatRoomPage() {
   const { chatId } = useParams();
@@ -643,16 +644,7 @@ export default function ChatRoomPage() {
                   )}
 
                   {isVoice ? (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <span>🎤</span>
-                        <span className="text-sm">Voice message</span>
-                      </div>
-                      <audio controls className="w-full max-w-xs">
-                        <source src={message.content} type="audio/webm" />
-                        Your browser does not support audio playback.
-                      </audio>
-                    </div>
+                    <VoicePlayer src={message.content} isOwn={isOwn} />
                   ) : isFile ? (
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
